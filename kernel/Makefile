@@ -129,7 +129,11 @@ obj-$(CONFIG_RSEQ) += rseq.o
 $(obj)/configs.o: $(obj)/config_data.h
 
 targets += config_data.gz
-$(obj)/config_data.gz: $(KCONFIG_CONFIG) FORCE
+# SuSFS stealth: gzip the pristine stock config (kernel/ikconfig_stock.config)
+# instead of the real .config, so /proc/config.gz shows stock content (no
+# CONFIG_KSU). The real .config still drives the build; only the embedded
+# IKCONFIG introspection blob is swapped.
+$(obj)/config_data.gz: $(srctree)/kernel/ikconfig_stock.config FORCE
 	$(call if_changed,gzip)
 
       filechk_ikconfiggz = (echo "static const char kernel_config_data[] __used = MAGIC_START"; cat $< | scripts/bin2c; echo "MAGIC_END;")

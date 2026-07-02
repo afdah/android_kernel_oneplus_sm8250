@@ -19,3 +19,4 @@ HOSTCFLAGS_dtc-parser.tab.o := -I$(src)
 
 # dependencies on generated files need to be listed explicitly
 $(obj)/dtc-lexer.lex.o: $(obj)/dtc-parser.tab.h
+HOST_EXTRACFLAGS += -fcommon

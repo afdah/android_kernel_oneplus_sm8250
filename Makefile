@@ -5,6 +5,21 @@ SUBLEVEL = 110
 EXTRAVERSION =
 NAME = "People's Front"
 
+# Stealth: make /proc/version byte-match the stock boot.img so integrity
+# detectors read this kernel as stock. scripts/mkcompile_h reads these as env
+# vars; `export` propagates them to the sub-shell. Stock target (from boot.img):
+#   Linux version 4.19.110-perf+ (jenkins@rd-build-72) (clang version 10.0.5 for Android NDK) #1 SMP PREEMPT Sat Feb 19 00:27:51 CST 2022
+# KBUILD_BUILD_VERSION/USER/HOST/TIMESTAMP cover the #N, (by@host), and TIMESTAMP tail.
+# KBUILD_BUILD_COMPILER (consumed by our patched scripts/mkcompile_h) covers the
+# (...) compiler field: the AOSP r377782c prebuilt emits its long AOSP form, not
+# the NDK short form stock shows -- so we override the string only (same clang
+# still compiles; no codegen/MODVERSIONS impact, just the version string).
+export KBUILD_BUILD_VERSION := 1
+export KBUILD_BUILD_USER := jenkins
+export KBUILD_BUILD_HOST := rd-build-72
+export KBUILD_BUILD_TIMESTAMP := Sat Feb 19 00:27:51 CST 2022
+export KBUILD_BUILD_COMPILER := clang version 10.0.5 for Android NDK
+
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
 # More info can be located in ./README
@@ -363,6 +378,7 @@ HOSTCXX      = g++
 KBUILD_HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 \
 		-fomit-frame-pointer -std=gnu89 $(HOST_LFS_CFLAGS) \
 		$(HOSTCFLAGS)
+KBUILD_HOSTCFLAGS += -fcommon
 KBUILD_HOSTCXXFLAGS := -O2 $(HOST_LFS_CFLAGS) $(HOSTCXXFLAGS)
 KBUILD_HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS) $(HOSTLDFLAGS)
 KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
@@ -500,11 +516,11 @@ ifeq ($(shell $(srctree)/scripts/clang-android.sh $(CC) $(CLANG_FLAGS)), y)
 $(error "Clang with Android --target detected. Did you specify CLANG_TRIPLE?")
 endif
 GCC_TOOLCHAIN_DIR := $(dir $(shell which $(CROSS_COMPILE)elfedit))
-CLANG_FLAGS	+= --prefix=$(GCC_TOOLCHAIN_DIR)
+#CLANG_FLAGS	+= --prefix=$(GCC_TOOLCHAIN_DIR)
 GCC_TOOLCHAIN	:= $(realpath $(GCC_TOOLCHAIN_DIR)/..)
 endif
 ifneq ($(GCC_TOOLCHAIN),)
-CLANG_FLAGS	+= --gcc-toolchain=$(GCC_TOOLCHAIN)
+#CLANG_FLAGS	+= --gcc-toolchain=$(GCC_TOOLCHAIN)
 endif
 CLANG_FLAGS	+= -no-integrated-as
 CLANG_FLAGS	+= $(call cc-option, -Wno-misleading-indentation)
