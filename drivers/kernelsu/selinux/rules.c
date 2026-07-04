@@ -174,6 +174,11 @@ static int apply_kernelsu_rules_fn(void *ptr)
     ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "getpgid");
     ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "sigkill");
 
+#ifdef CONFIG_KSU_SUSFS
+    // Allow umount in zygote process without installing zygisk
+    ksu_allow(db, "zygote", "labeledfs", "filesystem", "unmount");
+#endif
+
     return 0;
 }
 
@@ -258,6 +263,20 @@ do_stop_machine:
 out_flush:
 	smp_mb();
 	reset_avc_cache();
+#ifdef CONFIG_KSU_SUSFS
+	// SuSFS: cache SELinux sids for runtime domain checks.
+	// Must run AFTER the policy write-lock is released above
+	// (write_unlock at out_unlock, or stop_machine return):
+	// security_secctx_to_secid() takes read_lock(policy_rwlock) and may
+	// sleep (GFP_KERNEL); calling it from inside apply_kernelsu_rules_fn()
+	// under write_lock(policy_rwlock) self-deadlocks. Porting fix: v1.5.5
+	// placed these in old-KSU apply_kernelsu_rules (rcu_read_lock only);
+	// KernelSU-Next runs that body under write_lock, so they move here.
+	// See session-16/17 root-cause analysis.
+	susfs_set_init_sid();
+	susfs_set_ksu_sid();
+	susfs_set_zygote_sid();
+#endif
 #endif
 }
 

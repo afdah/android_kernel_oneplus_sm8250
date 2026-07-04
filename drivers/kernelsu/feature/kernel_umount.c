@@ -9,6 +9,9 @@
 #include <linux/path.h>
 #include <linux/printk.h>
 #include <linux/types.h>
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+#include <linux/susfs.h>
+#endif
 #ifndef KSU_HAS_PATH_UMOUNT
 #include <linux/syscalls.h>
 #endif
@@ -95,6 +98,41 @@ static void try_umount(const char *mnt, int flags)
     ksu_umount_mnt(mnt, &path, flags);
 }
 
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+/*
+ * susfs: path-based umount exposed for SUSFS TRY_UMOUNT.
+ * Ported from susfs4ksu v1.5.5 10_enable_susfs_for_ksu.patch (old-KSU
+ * core_hook.c::try_umount), adapted to KSU-Next's 3-arg
+ * ksu_umount_mnt(mnt, path, flags) and the 4.19 set_fs/ksys_umount path.
+ * check_mnt=false skips the mountpoint check (used for loop devices
+ * like /data/adb/modules where dev_name cannot be verified).
+ */
+extern bool susfs_is_log_enabled; /* defined in fs/susfs.c */
+
+void ksu_try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid)
+{
+	struct path path;
+	int err = kern_path(mnt, 0, &path);
+	if (err) {
+		return;
+	}
+
+	if (check_mnt && path.dentry != path.mnt->mnt_root) {
+		/* not the root mountpoint, maybe already umounted by others */
+		path_put(&path);
+		return;
+	}
+
+#if defined(CONFIG_KSU_SUSFS_ENABLE_LOG)
+	if (susfs_is_log_enabled) {
+		pr_info("susfs: umounting '%s' for uid: %d\n", mnt, uid);
+	}
+#endif
+
+	ksu_umount_mnt(mnt, &path, flags);
+}
+#endif /* CONFIG_KSU_SUSFS_TRY_UMOUNT */
+
 struct umount_tw {
 	struct callback_head cb;
 };
@@ -158,6 +196,10 @@ int ksu_handle_umount(uid_t old_uid, uid_t new_uid)
 		pr_info("handle umount ignore non zygote child: %d\n", current->pid);
 		return 0;
 	}
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+	susfs_try_umount_all(new_uid);
+	return 0;
+#endif
 	// umount the target mnt
 	pr_info("handle umount for uid: %d, pid: %d\n", new_uid, current->pid);
 

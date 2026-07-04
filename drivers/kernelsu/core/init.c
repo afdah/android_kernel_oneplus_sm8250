@@ -19,6 +19,7 @@
 #include "ksu.h"
 #include "infra/file_wrapper.h"
 #include "selinux/selinux.h"
+#include <linux/susfs.h>
 
 extern void __init ksu_lsm_hook_init(void);
 extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
@@ -99,6 +100,10 @@ int __init kernelsu_init(void)
 	ksu_feature_init();
 
 	ksu_supercalls_init();
+
+#ifdef CONFIG_KSU_SUSFS
+	susfs_init();
+#endif
 
 	
 

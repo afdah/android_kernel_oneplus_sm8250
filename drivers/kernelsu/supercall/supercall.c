@@ -20,6 +20,10 @@
 
 #include "tiny_sulog.h"
 
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs.h>
+#endif
+
 uint32_t ksuver_override = 0;
 
 static int anon_ksu_release(struct inode *inode, struct file *filp)
@@ -79,6 +83,101 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 		magic2);
 #endif
 
+#ifdef CONFIG_KSU_SUSFS
+	// If magic2 is susfs and current process is root
+	if (magic2 == SUSFS_MAGIC && current_uid().val == 0) {
+#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+		if (cmd == CMD_SUSFS_ADD_SUS_PATH) {
+			susfs_add_sus_path(arg);
+			return 0;
+		}
+		if (cmd == CMD_SUSFS_ADD_SUS_PATH_LOOP) {
+			/* routed to same handler: our hlist+flag is already eviction-resilient */
+			susfs_add_sus_path(arg);
+			return 0;
+		}
+#endif // CONFIG_KSU_SUSFS_SUS_PATH
+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+		if (cmd == CMD_SUSFS_ADD_SUS_MOUNT) {
+			susfs_add_sus_mount(arg);
+			return 0;
+		}
+		if (cmd == CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS) {
+			susfs_set_hide_sus_mnts_for_non_su_procs(arg);
+			return 0;
+		}
+#endif // CONFIG_KSU_SUSFS_SUS_MOUNT
+#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
+		if (cmd == CMD_SUSFS_ADD_SUS_KSTAT) {
+			susfs_add_sus_kstat(arg);
+			return 0;
+		}
+		if (cmd == CMD_SUSFS_UPDATE_SUS_KSTAT) {
+			susfs_update_sus_kstat(arg);
+			return 0;
+		}
+		if (cmd == CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY) {
+			/* tool sets is_statically=true in the struct; same handler reads it */
+			susfs_add_sus_kstat(arg);
+			return 0;
+		}
+#endif // CONFIG_KSU_SUSFS_SUS_KSTAT
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+		if (cmd == CMD_SUSFS_ADD_TRY_UMOUNT) {
+			susfs_add_try_umount(arg);
+			return 0;
+		}
+		if (cmd == CMD_SUSFS_RUN_UMOUNT_FOR_CURRENT_MNT_NS) {
+			susfs_run_try_umount_for_current_mnt_ns();
+			return 0;
+		}
+#endif // CONFIG_KSU_SUSFS_TRY_UMOUNT
+#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
+		if (cmd == CMD_SUSFS_SET_UNAME) {
+			susfs_set_uname(arg);
+			return 0;
+		}
+#endif // CONFIG_KSU_SUSFS_SPOOF_UNAME
+#ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
+		if (cmd == CMD_SUSFS_ENABLE_LOG) {
+			susfs_enable_log(arg);
+			return 0;
+		}
+#endif // CONFIG_KSU_SUSFS_ENABLE_LOG
+#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
+		if (cmd == CMD_SUSFS_SET_CMDLINE_OR_BOOTCONFIG) {
+			susfs_set_cmdline_or_bootconfig(arg);
+			return 0;
+		}
+#endif // CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
+#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
+		if (cmd == CMD_SUSFS_ADD_OPEN_REDIRECT) {
+			susfs_add_open_redirect(arg);
+			return 0;
+		}
+#endif // CONFIG_KSU_SUSFS_OPEN_REDIRECT
+#ifdef CONFIG_KSU_SUSFS_SUS_MAP
+		if (cmd == CMD_SUSFS_ADD_SUS_MAP) {
+			susfs_add_sus_map(arg);
+			return 0;
+		}
+#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+		if (cmd == CMD_SUSFS_SHOW_VERSION) {
+			susfs_show_version(arg);
+			return 0;
+		}
+		if (cmd == CMD_SUSFS_SHOW_VARIANT) {
+			susfs_show_variant(arg);
+			return 0;
+		}
+		if (cmd == CMD_SUSFS_SHOW_ENABLED_FEATURES) {
+			susfs_get_enabled_features(arg);
+			return 0;
+		}
+		return 0;
+	}
+#endif // #ifdef CONFIG_KSU_SUSFS
+
 	// Check if this is a request to install KSU fd
 	if (magic2 == KSU_INSTALL_MAGIC2) {
 		int fd = ksu_install_fd();
@@ -86,15 +185,15 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 		if (copy_to_user((void __user *)*arg, &fd, sizeof(fd))) {
 			pr_err("install ksu fd reply err\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
-		close_fd(fd);
+			close_fd(fd);
 #else
-		__close_fd(current->files, fd);
+			__close_fd(current->files, fd);
 #endif
 		}
 		return 0;
 	}
 
-	// extensions 
+	// extensions
 	u64 reply = (u64)*arg;
 
 	if (magic2 == CHANGE_MANAGER_UID) {
@@ -112,7 +211,7 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 
 		return 0;
 	}
-	
+
 	if (magic2 == GET_SULOG_DUMP_V2) {
 		// only root is allowed for this command
 		if (current_uid().val != 0)
@@ -141,7 +240,7 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 	// WARNING!!! triple ptr zone! ***
 	// https://wiki.c2.com/?ThreeStarProgrammer
 	if (magic2 == CHANGE_SPOOF_UNAME) {
-		// only root is allowed for this command 
+		// only root is allowed for this command
 		if (current_uid().val != 0)
 			return 0;
 
@@ -177,12 +276,12 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 		// for release
 		if (strncpy_from_user(release_buf, (char __user *)u_ptr, sizeof(release_buf)) < 0)
 			return 0;
-		release_buf[sizeof(release_buf) - 1] = '\0'; 
+		release_buf[sizeof(release_buf) - 1] = '\0';
 
 		// for version
 		if (strncpy_from_user(version_buf, (char __user *)(u_ptr + strlen(release_buf) + 1), sizeof(version_buf)) < 0)
 			return 0;
-		version_buf[sizeof(version_buf) - 1] = '\0'; 
+		version_buf[sizeof(version_buf) - 1] = '\0';
 
 		if (original_release_buf[0] == '\0') {
 			struct new_utsname *u_curr = utsname();
