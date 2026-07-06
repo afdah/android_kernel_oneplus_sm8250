@@ -72,3 +72,4 @@ void on_boot_completed(void)
     track_throne(false);
     ksu_avc_spoof_late_init();
 }
+
